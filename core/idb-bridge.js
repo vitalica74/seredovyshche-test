@@ -79,13 +79,18 @@ export function createIDBHostBridge({frame,getToken,getProjectId,onError}) {
 export function sandboxIndexedDBShim(token) {
   let seq=0;
   const pending=new Map();
+  const report=message=>{try{parent.postMessage({__seredovyshcheDiagnostic:token,type:'IndexedDB',message:String(message)},'*');}catch(_){}};
+  report('Адаптер IndexedDB завантажено');
   const call=(action,database,extras={})=>new Promise((resolve,reject)=>{
-    const id=++seq;pending.set(id,{resolve,reject});
-    parent.postMessage({__svIDB:token,id,action,database,...extras},'*');
+    const id=++seq;
+    const timer=setTimeout(()=>{if(!pending.has(id))return;pending.delete(id);const error=new Error('Немає відповіді від сховища за 8 секунд: '+action);report(error.message);reject(error);},8000);
+    pending.set(id,{resolve,reject,timer});
+    try{parent.postMessage({__svIDB:token,id,action,database,...extras},'*');}catch(error){clearTimeout(timer);pending.delete(id);report('Помилка запиту '+action+': '+error.message);reject(error);}
   });
   addEventListener('message',e=>{
     if(e.source!==parent||!e.data||e.data.__svIDBReply!==token)return;
-    const p=pending.get(e.data.id);if(!p)return;pending.delete(e.data.id);
+    const p=pending.get(e.data.id);if(!p)return;pending.delete(e.data.id);clearTimeout(p.timer);
+    if(e.data.error)report('Операція '+e.data.id+': '+e.data.error);
     e.data.error?p.reject(new Error(e.data.error)):p.resolve(e.data.result);
   });
   function req(execute){
@@ -94,7 +99,7 @@ export function sandboxIndexedDBShim(token) {
       r.result=result;
       r.onsuccess?.({target:r});
     }).catch(error=>{
-      r.error=error;
+      r.error=error;report('Помилка запиту: '+(error&&error.message||error));
       if(r.onerror)r.onerror({target:r});else console.error('IndexedDB operation:',error);
     });
     return r;
@@ -141,7 +146,7 @@ export function sandboxIndexedDBShim(token) {
           await call('upgrade',name,{version:requested,stores:names});
         }
         r.onsuccess?.({target:r});
-      }).catch(error=>{r.error=error;r.onerror?.({target:r});});
+      }).catch(error=>{r.error=error;report('Відкриття бази '+name+': '+(error&&error.message||error));r.onerror?.({target:r});});
       return r;
     },
     deleteDatabase(name){
