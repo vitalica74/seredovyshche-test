@@ -82,6 +82,7 @@ export function sandboxIndexedDBShim(token) {
   const report=message=>{try{parent.postMessage({__seredovyshcheDiagnostic:token,type:'IndexedDB',message:String(message)},'*');}catch(_){}};
   report('Адаптер IndexedDB завантажено');
   const call=(action,database,extras={})=>new Promise((resolve,reject)=>{
+    if(database==='MyGarageDB')report('MyGarageDB → '+action+(extras.store?' / '+extras.store:'')+(action==='upgrade'?' / версія '+extras.version:''));
     const id=++seq;
     const timer=setTimeout(()=>{if(!pending.has(id))return;pending.delete(id);const error=new Error('Немає відповіді від сховища за 8 секунд: '+action);report(error.message);reject(error);},8000);
     pending.set(id,{resolve,reject,timer});
@@ -173,6 +174,7 @@ export function sandboxIndexedDBShim(token) {
           r.onupgradeneeded?.({target:r,oldVersion:current.version,newVersion:requested});
           await call('upgrade',name,{version:requested,stores:names});
         }
+        if(name==='MyGarageDB')report('MyGarageDB: відкрито версію '+requested+'; сховища: '+names.join(', '));
         r.onsuccess?.({target:r});
       }).catch(error=>{r.error=error;report('Відкриття бази '+name+': '+(error&&error.message||error));r.onerror?.({target:r});});
       return r;
