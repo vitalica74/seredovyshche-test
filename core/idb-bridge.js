@@ -121,10 +121,36 @@ export function sandboxIndexedDBShim(token) {
           },
           transaction(storeNames,mode='readonly'){
             const selected=Array.isArray(storeNames)?storeNames:[storeNames];
-            return {
-              mode,objectStore(store){
+            let pendingCount=0,hasOperations=false,finished=false,failed=false;
+            const tx={
+              mode,oncomplete:null,onerror:null,onabort:null,error:null,
+              objectStore(store){
                 if(!selected.includes(store)||!names.includes(store))throw Error('NotFoundError: '+store);
-                const perform=(action,extras)=>req(()=>call(action,name,{store,...extras}));
+                const perform=(action,extras={})=>{
+                  if(finished)throw Error('TransactionInactiveError');
+                  hasOperations=true;pendingCount++;
+                  const request={result:undefined,error:null,onsuccess:null,onerror:null};
+                  Promise.resolve().then(()=>call(action,name,{store,...extras})).then(result=>{
+                    request.result=result;
+                    try{request.onsuccess?.({target:request});}catch(error){report('Обробник запиту: '+error.message);}
+                  }).catch(error=>{
+                    request.error=error;tx.error=error;failed=true;
+                    report('Транзакція '+action+': '+(error&&error.message||error));
+                    try{request.onerror?.({target:request});}catch(_){}
+                    try{tx.onerror?.({target:tx});}catch(_){}
+                  }).finally(()=>{
+                    pendingCount--;
+                    if(pendingCount===0&&!finished){
+                      queueMicrotask(()=>{
+                        if(pendingCount||finished)return;
+                        finished=true;
+                        try{if(failed)tx.onabort?.({target:tx});else tx.oncomplete?.({target:tx});}
+                        catch(error){report('Обробник завершення транзакції: '+error.message);}
+                      });
+                    }
+                  });
+                  return request;
+                };
                 return {
                   getAll:()=>perform('getAll'),
                   getAllKeys:()=>perform('getAllKeys'),
@@ -135,8 +161,10 @@ export function sandboxIndexedDBShim(token) {
                   delete:key=>perform('delete',{key}),
                   clear:()=>perform('clear')
                 };
-              }
+              },
+              abort(){if(finished)return;finished=true;failed=true;tx.error=new Error('AbortError');tx.onabort?.({target:tx});}
             };
+            return tx;
           },
           close(){}
         };
