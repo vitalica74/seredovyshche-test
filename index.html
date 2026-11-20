@@ -63,7 +63,7 @@ window.addEventListener('message',event=>{
  runtimeErrors.push(line);
  document.getElementById('webRuntimeErrors').textContent=runtimeErrors.join('\n\n');
  document.getElementById('webRuntimeErrorCount').textContent='⚠ Помилки програми ('+runtimeErrors.length+')';
- diagnostics.style.display='block';showErrors.style.display='none';
+ if(diagnostics.style.display==='block'){showErrors.style.display='none';}else{showErrors.style.display='block';showErrors.textContent='⚠ Помилки ('+runtimeErrors.length+')';}
 });
 
 function webLaunch(p){
