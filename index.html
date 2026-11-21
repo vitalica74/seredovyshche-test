@@ -33,7 +33,7 @@ const downloadDismiss=document.createElement('button');
 downloadDismiss.textContent='✕';downloadDismiss.setAttribute('aria-label','Закрити повідомлення');
 downloadDismiss.style.cssText='position:absolute;right:8px;top:8px;border:0;background:transparent;color:white;font-size:18px;padding:5px 10px';
 downloadDismiss.onclick=()=>downloadNotice.style.display='none';
-downloadNotice.append(downloadDismiss);document.body.append(downloadNotice);
+downloadNotice.append(downloadDismiss);webDialog.append(downloadNotice);
 window.addEventListener('message',event=>{
  const d=event.data;
  if(event.source!==webFrame.contentWindow||!activeRuntimeToken||!d||d.__svDownloadToken!==activeRuntimeToken||typeof d.filename!=='string')return;
